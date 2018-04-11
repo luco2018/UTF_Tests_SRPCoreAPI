@@ -63,8 +63,10 @@ public static class SRP03Rendering
     public static Camera NoneCam;
 
     // Main entry point for our scriptable render loop
-    public static void Render(ScriptableRenderContext context, IEnumerable<Camera> cameras, SRP03CustomParameter SRP03CP)
+    public static void Render(ScriptableRenderContext context, Camera[] cameras, SRP03CustomParameter SRP03CP)
     {
+        RenderPipeline.BeginFrameRendering(cameras);
+
         Camera cullingCam;
         switch (SRP03CP.DoCulling)
         {
@@ -93,6 +95,9 @@ public static class SRP03Rendering
 
         foreach (Camera camera in cameras)
         {
+
+            RenderPipeline.BeginCameraRendering(camera);
+
             bool RenderThisCam = true;
 
             switch (SRP03CP.DoCulling)

@@ -49,6 +49,8 @@ public class SRP08Instance : RenderPipeline
 
 public static class SRP08Rendering
 {
+    private static readonly ShaderPassName m_UnlitPassName = new ShaderPassName("SRPDefaultUnlit");
+
     public static void Render(ScriptableRenderContext context, IEnumerable<Camera> cameras, SRP08CustomParameter SRP08CP)
     {
         foreach (Camera camera in cameras)
@@ -81,8 +83,9 @@ public static class SRP08Rendering
             }
 
             // Setup DrawSettings and FilterSettings
-            ShaderPassName passName = new ShaderPassName("BasicPass");
+            ShaderPassName passName = new ShaderPassName("");
             DrawRendererSettings drawSettings = new DrawRendererSettings(camera, passName);
+            drawSettings.SetShaderPassName(1,m_UnlitPassName);
             FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
 
             if (SRP08CP.DrawOpaque)
