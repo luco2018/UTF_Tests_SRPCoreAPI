@@ -5,16 +5,10 @@ using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.XR;
 
-// Very basic scriptable rendering loop example:
-// - Use with BasicRenderPipelineShader.shader (the loop expects "BasicPass" pass type to exist)
-// - Supports up to 8 enabled lights in the scene (directional, point or spot)
-// - Does the same physically based BRDF as the Standard shader
-// - No shadows
-// - This loop also does not setup lightmaps, light probes, reflection probes or light cookies
-
 [ExecuteInEditMode]
 public class SRP01 : RenderPipelineAsset
 {
+
 #if UNITY_EDITOR
     [UnityEditor.MenuItem("Assets/Create/Render Pipeline/SRPFTP/SRP01", priority = 1)]
     static void CreateSRP01()
@@ -53,28 +47,28 @@ public static class SRP01Rendering
     static int skipcount = 1000;
     static UpdateText text;
 
-    // Main entry point for our scriptable render loop
+    private static readonly ShaderPassName m_UnlitPassName = new ShaderPassName("SRPDefaultUnlit"); //For default shaders
+
     public static void Render(ScriptableRenderContext context, IEnumerable<Camera> cameras)
     {
-        //bool stereoEnabled = XRSettings.isDeviceActive;
         foreach (Camera camera in cameras)
         {
             // Culling
             ScriptableCullingParameters cullingParams;
-
             if (!CullResults.GetCullingParameters(camera, out cullingParams))
                 continue;
             CullResults cull = new CullResults();
 
+            // Record time for performance (before)
             if(camera == Camera.main)
             {
-                //Before Cull
                 t = Time.realtimeSinceStartup;
             }
 
-            //Do Cull
+            //Do Culling
             CullResults.Cull(ref cullingParams, context, ref cull);
 
+            // Record time for performance (after)
             if(camera == Camera.main)
             {
                 t = Time.realtimeSinceStartup - t;
@@ -113,22 +107,12 @@ public static class SRP01Rendering
                         if(text != null)
                         text.UpdateTextContent("skipping first 1000 frames..."+count);
                 }
-
-
                 count++;
             }
 
-
-            // Setup camera for rendering (sets render target, view/projection matrices and other
-            // per-camera built-in shader variables).
-            // If stereo is enabled, we also configure stereo matrices, viewports, and XR device render targets
+            //Start rendering part
+            
             context.SetupCameraProperties(camera);
-
-            // Draws in-between [Start|Stop]MultiEye are stereo-ized by engine
-            //if (stereoEnabled)
-            //{
-             //   context.StartMultiEye(camera);
-            //}
 
             // clear depth buffer
             CommandBuffer cmd = new CommandBuffer();;
@@ -145,6 +129,7 @@ public static class SRP01Rendering
             // Setup DrawSettings and FilterSettings
             ShaderPassName passName = new ShaderPassName("BasicPass");
             DrawRendererSettings drawSettings = new DrawRendererSettings(camera, passName);
+            drawSettings.SetShaderPassName(1,m_UnlitPassName); //For drawing default shaders
             FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
 
             // Draw opaque objects using BasicPass shader pass
@@ -156,15 +141,7 @@ public static class SRP01Rendering
             drawSettings.sorting.flags = SortFlags.CommonTransparent;
             filterSettings.renderQueueRange = RenderQueueRange.transparent;
             context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-/* 
-            if (stereoEnabled)
-            {
-                context.StopMultiEye(camera);
-                // StereoEndRender will reset state on the camera to pre-Stereo settings,
-                // and invoke XR based events/callbacks.
-                context.StereoEndRender(camera);
-            }
-*/
+
             context.Submit();
         }
     }

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class UpdateText : MonoBehaviour 
 {
-	public InputField text;
+	public TextMesh text;
 	
 	// Use this for initialization
 	public void UpdateTextContent(string tx)
