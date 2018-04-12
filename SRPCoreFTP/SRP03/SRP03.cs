@@ -5,19 +5,9 @@ using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.XR;
 
-// Very basic scriptable rendering loop example:
-// - Use with BasicRenderPipelineShader.shader (the loop expects "BasicPass" pass type to exist)
-// - Supports up to 8 enabled lights in the scene (directional, point or spot)
-// - Does the same physically based BRDF as the Standard shader
-// - No shadows
-// - This loop also does not setup lightmaps, light probes, reflection probes or light cookies
-
 [ExecuteInEditMode]
 public class SRP03 : RenderPipelineAsset
 {
-    public SRP03CustomParameter SRP03CP = new SRP03CustomParameter();
-    public SRP03CustomParameter.CullingCamera culling = SRP03CustomParameter.CullingCamera.MainCamera;
-
 
 #if UNITY_EDITOR
     [UnityEditor.MenuItem("Assets/Create/Render Pipeline/SRPFTP/SRP03", priority = 1)]
@@ -31,24 +21,25 @@ public class SRP03 : RenderPipelineAsset
 
     protected override IRenderPipeline InternalCreatePipeline()
     {
-        SRP03CP.DoCulling = culling;
-        return new SRP03Instance(SRP03CP);
+        return new SRP03Instance();
     }
 }
 
 public class SRP03Instance : RenderPipeline
 {
-    public SRP03CustomParameter SRP03CP;
-
-    public SRP03Instance(SRP03CustomParameter SRP03CustomParameter)
+    public SRP03Instance()
     {
-        SRP03CP = SRP03CustomParameter;
     }
 
     public override void Render(ScriptableRenderContext renderContext, Camera[] cameras)
     {
-        //base.Render(renderContext, cameras);
-        SRP03Rendering.Render(renderContext, cameras, SRP03CP);
+        Camera[] defaultCameras;
+        Camera[] customCameras;
+
+        SRPDefault.FilterCameras(cameras,out defaultCameras, out customCameras );
+
+        SRP03Rendering.Render(renderContext, customCameras);
+        SRPDefault.Render(renderContext, defaultCameras );
     }
 }
 
@@ -58,185 +49,98 @@ public static class SRP03Rendering
     public static Renderer[] rens;
     public static Light[] lights;
     public static ReflectionProbe[] reflprobes;
-    public static Camera MainCam;
-    public static Camera AllCam;
-    public static Camera NoneCam;
 
-    // Main entry point for our scriptable render loop
-    public static void Render(ScriptableRenderContext context, Camera[] cameras, SRP03CustomParameter SRP03CP)
+    private static readonly ShaderPassName m_UnlitPassName = new ShaderPassName("SRPDefaultUnlit"); //For default shaders
+
+    public static void Render(ScriptableRenderContext context, Camera[] cameras)
     {
         RenderPipeline.BeginFrameRendering(cameras);
 
-        Camera cullingCam;
-        switch (SRP03CP.DoCulling)
-        {
-            case SRP03CustomParameter.CullingCamera.MainCamera:
-                {
-                    cullingCam = MainCam;
-                    break;
-                }
-            case SRP03CustomParameter.CullingCamera.AllCam:
-                {
-                    cullingCam = AllCam;
-                    break;
-                }
-            case SRP03CustomParameter.CullingCamera.NoneCam:
-                {
-                    cullingCam = NoneCam;
-                    break;
-                }
-            default:
-                {
-                    cullingCam = MainCam;
-                    break;
-                }
-        }
-        //bool stereoEnabled = XRSettings.isDeviceActive;
-
         foreach (Camera camera in cameras)
         {
-
             RenderPipeline.BeginCameraRendering(camera);
 
-            bool RenderThisCam = true;
+            // Culling
+            ScriptableCullingParameters cullingParams;
 
-            switch (SRP03CP.DoCulling)
+            if (!CullResults.GetCullingParameters(camera, out cullingParams))
+                continue;
+            CullResults cull = new CullResults();
+            CullResults.Cull(ref cullingParams, context, ref cull);
+
+            //==============================================
+            if( camera.name == "MainCamera" || camera.name == "AllCam" || camera.name == "NoneCam" ) 
             {
-                case SRP03CustomParameter.CullingCamera.MainCamera:
-                    {
-                        if(camera == AllCam || camera == NoneCam)
-                            RenderThisCam = false;
-                        break;
-                    }
-                case SRP03CustomParameter.CullingCamera.AllCam:
-                    {
-                        if(camera == MainCam || camera == NoneCam)
-                            RenderThisCam = false;
-                        break;
-                    }
-                case SRP03CustomParameter.CullingCamera.NoneCam:
-                    {
-                        if(camera == MainCam || camera == AllCam)
-                            RenderThisCam = false;
-                        break;
-                    }
-                default:
-                    {
-                        break;
-                    }
-            }
-
-            if(RenderThisCam)
-            {
-                // Culling
-                ScriptableCullingParameters cullingParams;
-
-                if (!CullResults.GetCullingParameters(camera, out cullingParams))
-                    continue;
-                CullResults cull = new CullResults();
-                CullResults.Cull(ref cullingParams, context, ref cull);
-
-                //==============================================
-                if(camera == cullingCam) //only show result of that camera
+                string tx = "";
+                tx += "Culling Result of : " + camera.name + " \n";
+                tx += "\n";
+                //-------------------------------
+                VisibleLight[] ls = cull.visibleLights.ToArray();
+                tx += "Lights : Visible : "+ls.Length+"\n";
+                
+                if (lights != null)
                 {
-                    string tx = "";
-                    tx += "Culling Result of : " + cullingCam.name + " \n";
-                    tx += "\n";
-                    //-------------------------------
-                    VisibleLight[] ls = cull.visibleLights.ToArray();
-                    tx += "Lights : Visible : "+ls.Length+"\n";
-                    
-                    if (lights != null)
+                    for (int i = 0; i < lights.Length; i++)
                     {
-                        for (int i = 0; i < lights.Length; i++)
+                        int existed = 0;
+                        for (int j = 0; j < ls.Length; j++)
                         {
-                            int existed = 0;
-                            for (int j = 0; j < ls.Length; j++)
+                            if (lights[i] == ls[j].light)
                             {
-                                if (lights[i] == ls[j].light)
-                                {
-                                    existed++;
-                                }
-                            }
-                            if (existed > 0)
-                            {
-                                tx += lights[i].gameObject.name + " : <color=#0F0>Visible</color>" + "\n";
-                            }
-                            else
-                            {
-                                tx += lights[i].gameObject.name + " : <color=#F00>Not Visible</color>" + "\n";
+                                existed++;
                             }
                         }
-                    }
-                    else
-                    {
-                        tx += "Light list is null \n";
-                    }
-                    tx += "\n";
-                    //-------------------------------
-                    VisibleReflectionProbe[] rs = cull.visibleReflectionProbes.ToArray();
-                    tx += "Reflection Probes : Visible : "+rs.Length+"\n";
-                    
-                    if (reflprobes != null)
-                    {
-                        for (int i = 0; i < reflprobes.Length; i++)
+                        if (existed > 0)
                         {
-                            int existed = 0;
-                            for (int j = 0; j < rs.Length; j++)
-                            {
-                                if (reflprobes[i] == rs[j].probe)
-                                {
-                                    existed++;
-                                }
-                            }
-                            if (existed > 0)
-                            {
-                                tx += reflprobes[i].gameObject.name + " : <color=#0F0>Visible</color>" + "\n";
-                            }
-                            else
-                            {
-                                tx += reflprobes[i].gameObject.name + " : <color=#F00>Not Visible</color>" + "\n";
-                            }
+                            tx += lights[i].gameObject.name + " : <color=#0F0>Visible</color>" + "\n";
+                        }
+                        else
+                        {
+                            tx += lights[i].gameObject.name + " : <color=#F00>Not Visible</color>" + "\n";
                         }
                     }
-                    else
+                }
+                else
+                {
+                    tx += "Light list is null \n";
+                }
+                tx += "\n";
+                //-------------------------------
+                VisibleReflectionProbe[] rs = cull.visibleReflectionProbes.ToArray();
+                tx += "Reflection Probes : Visible : "+rs.Length+"\n";
+                
+                if (reflprobes != null)
+                {
+                    for (int i = 0; i < reflprobes.Length; i++)
                     {
-                        tx += "reflection probe list is null \n";
-                    }
-                    tx += "\n";
-                    //-------------------------------
-                    
-                    tx += "Renderers : \n";
-                    /* 
-                    VisibleRenderers[] vrens = cullingCamResult.visibleRenderers.ToArray();
-                    if (rens != null)
-                    {
-                        for (int i = 0; i < rens.Length; i++)
+                        int existed = 0;
+                        for (int j = 0; j < rs.Length; j++)
                         {
-                            int existed = 0;
-                            for (int j = 0; j < vrens.Length; j++)
+                            if (reflprobes[i] == rs[j].probe)
                             {
-                                if (rens[i] == vrens[j])
-                                {
-                                    existed++;
-                                }
-                            }
-                            if (existed > 0)
-                            {
-                                tx += rens[i].gameObject.name + " : <color=#0F0>Visible</color>" + "\n";
-                            }
-                            else
-                            {
-                                tx += rens[i].gameObject.name + " : <color=#F00>Not Visible</color>" + "\n";
+                                existed++;
                             }
                         }
+                        if (existed > 0)
+                        {
+                            tx += reflprobes[i].gameObject.name + " : <color=#0F0>Visible</color>" + "\n";
+                        }
+                        else
+                        {
+                            tx += reflprobes[i].gameObject.name + " : <color=#F00>Not Visible</color>" + "\n";
+                        }
                     }
-                    else
-                    {
-                        tx += "renderer list is null \n";
-                    }
-                    */
-
+                }
+                else
+                {
+                    tx += "reflection probe list is null \n";
+                }
+                tx += "\n";
+                //-------------------------------
+                
+                tx += "Renderers : \n";
+                if(rens != null)
+                {
                     for (int i =0;i<rens.Length;i++)
                     {
                         if (rens[i].isVisible)
@@ -251,37 +155,30 @@ public static class SRP03Rendering
                     }
 
                     tx += "\n";
-                    
-                    
-                    //-------------------------------
-                    //Show debug msg on TextMesh
-                    //Debug.Log(tx);
-                    
-                    if (textMesh != null)
-                    {
-                        textMesh.text = tx;
-                        Debug.Log("<color=#0F0>TextMesh is updated</color>");
-                    }
-                    else
-                    {
-                        tx = "<color=#F00>TextMesh is null</color> Please hit play if you hasn't";
-                        Debug.Log(tx);
-                    }
-                    
-                
                 }
-                //==============================================
 
-                // Setup camera for rendering (sets render target, view/projection matrices and other
-                // per-camera built-in shader variables).
-                // If stereo is enabled, we also configure stereo matrices, viewports, and XR device render targets
+                
+                
+                //-------------------------------
+                //Show debug msg on TextMesh
+                //Debug.Log(tx);
+                
+                if (textMesh != null)
+                {
+                    textMesh.text = tx;
+                    Debug.Log("<color=#0F0>TextMesh is updated</color>");
+                }
+                else
+                {
+                    tx = "<color=#F00>TextMesh is null</color> Please hit play if you hasn't";
+                    Debug.Log(tx);
+                }
+                
+                //update = false;
+            }
+            //==============================================
+
                 context.SetupCameraProperties(camera);
-
-                // Draws in-between [Start|Stop]MultiEye are stereo-ized by engine
-                //if (stereoEnabled)
-                //{
-                //   context.StartMultiEye(camera);
-                //}
 
                 // clear depth buffer
                 CommandBuffer cmd = new CommandBuffer();
@@ -300,29 +197,31 @@ public static class SRP03Rendering
                 DrawRendererSettings drawSettings = new DrawRendererSettings(camera, passName);
                 FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
 
+                //Draw passes that has no light mode (default)
+                ShaderPassName passNameDefault = new ShaderPassName("");
+                DrawRendererSettings drawSettingsDefault = new DrawRendererSettings(camera, passNameDefault);
+                drawSettingsDefault.SetShaderPassName(1,m_UnlitPassName);
+
                 // Draw opaque objects using BasicPass shader pass
                 drawSettings.sorting.flags = SortFlags.CommonOpaque;
                 filterSettings.renderQueueRange = RenderQueueRange.opaque;
                 context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
 
+                // Default
+                drawSettingsDefault.sorting.flags = SortFlags.CommonOpaque;
+                context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
+
                 // Draw transparent objects using BasicPass shader pass
                 drawSettings.sorting.flags = SortFlags.CommonTransparent;
                 filterSettings.renderQueueRange = RenderQueueRange.transparent;
                 context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-    /* 
-                if (stereoEnabled)
-                {
-                    context.StopMultiEye(camera);
-                    // StereoEndRender will reset state on the camera to pre-Stereo settings,
-                    // and invoke XR based events/callbacks.
-                    context.StereoEndRender(camera);
-                }
-    */
+
+                // Default
+                drawSettingsDefault.sorting.flags = SortFlags.CommonTransparent;
+                context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
+
                 context.Submit();
             }
-
-
-        }
     }
 
     // Setup lighting variables for shader to use

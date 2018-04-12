@@ -7,9 +7,9 @@ public class S03_SetTextMesh : MonoBehaviour
     public Light[] lights;
     public Renderer[] rens;
     public ReflectionProbe[] refl;
-    public Camera MainCam;
-    public Camera AllCam;
-    public Camera NoneCam;
+   // public Camera MainCam;
+   // public Camera AllCam;
+   // public Camera NoneCam;
 
     void Start ()
     {
@@ -17,9 +17,12 @@ public class S03_SetTextMesh : MonoBehaviour
         SRP03Rendering.lights = lights;
         SRP03Rendering.reflprobes = refl;
         SRP03Rendering.rens = rens;
-        SRP03Rendering.MainCam = MainCam;
-        SRP03Rendering.AllCam = AllCam;
-        SRP03Rendering.NoneCam = NoneCam;
+        //SRP03Rendering.MainCam = MainCam;
+       // SRP03Rendering.AllCam = AllCam;
+       // SRP03Rendering.NoneCam = NoneCam;
+
+        //SRP03Rendering.update = true;
     }
+    
 
 }
