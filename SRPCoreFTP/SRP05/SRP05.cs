@@ -140,12 +140,12 @@ public static class SRP05Rendering
                 if (textMesh != null)
                 {
                     textMesh.text = tx;
-                    Debug.Log("<color=#0F0>TextMesh is updated</color>");
+                    //Debug.Log("<color=#0F0>TextMesh is updated</color>");
                 }
                 else
                 {
                     tx = "<color=#F00>TextMesh is null</color> Please hit play if you hasn't";
-                    Debug.Log(tx);
+                    //Debug.Log(tx);
                 }
             }
 
