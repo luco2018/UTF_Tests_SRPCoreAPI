@@ -7,12 +7,6 @@ using System.Linq;
 [ExecuteInEditMode]
 public class SRP05 : RenderPipelineAsset
 {
-    public SRP05CustomParameter SRP05CP = new SRP05CustomParameter();
-    public Color ClearColor = Color.white;
-    public bool DrawSkybox = true;
-    public bool DrawOpaque = true;
-    public bool DrawTransparent = true;
-
     #if UNITY_EDITOR
     [UnityEditor.MenuItem("Assets/Create/Render Pipeline/SRPFTP/SRP05", priority = 1)]
     static void CreateSRP05()
@@ -24,50 +18,49 @@ public class SRP05 : RenderPipelineAsset
 
     protected override IRenderPipeline InternalCreatePipeline()
     {
-        SRP05CP.ClearColor = ClearColor;
-        SRP05CP.DrawSkybox = DrawSkybox;
-        SRP05CP.DrawOpaque = DrawOpaque;
-        SRP05CP.DrawTransparent = DrawTransparent;
-        return new SRP05Instance(SRP05CP);
+        return new SRP05Instance();
     }
 }
 
 public class SRP05Instance : RenderPipeline
 {
-    public SRP05CustomParameter SRP05CP;
-
-    public SRP05Instance(SRP05CustomParameter SRP05CustomParameter)
+    public SRP05Instance()
     {
-        SRP05CP = SRP05CustomParameter;
     }
 
     public override void Render(ScriptableRenderContext renderContext, Camera[] cameras)
     {
-        //base.Render(renderContext, cameras);
-        SRP05Rendering.Render(renderContext, cameras,SRP05CP);
+        Camera[] defaultCameras;
+        Camera[] customCameras;
+
+        SRPDefault.FilterCameras(cameras,out defaultCameras, out customCameras );
+        
+        SRP05Rendering.Render(renderContext, customCameras);
+        SRPDefault.Render(renderContext, defaultCameras );
     }
 }
 
 public static class SRP05Rendering
 {
     public static TextMesh textMesh;
+    private static readonly ShaderPassName m_UnlitPassName = new ShaderPassName("SRPDefaultUnlit"); //For default shaders
 
-    public static void Render(ScriptableRenderContext context, IEnumerable<Camera> cameras, SRP05CustomParameter SRP05CP)
+    public static void Render(ScriptableRenderContext context, Camera[] cameras)
     {
+        RenderPipeline.BeginFrameRendering(cameras);
+
         string tx = "";
         foreach (Camera camera in cameras)
         {
-            ScriptableCullingParameters cullingParams;
+            RenderPipeline.BeginCameraRendering(camera);
 
-            // Stereo-aware culling parameters are configured to perform a single cull for both eyes
+            // Culling
+            ScriptableCullingParameters cullingParams;
             if (!CullResults.GetCullingParameters(camera, out cullingParams))
                 continue;
             CullResults cull = new CullResults();
             CullResults.Cull(ref cullingParams, context, ref cull);
 
-            //cull.visibleRenderers;
-
-            //
             if(camera == Camera.main) //Only generate result from main cam
             {
                 tx = "";
@@ -157,60 +150,46 @@ public static class SRP05Rendering
             }
 
 
-            // Setup camera for rendering (sets render target, view/projection matrices and other
-            // per-camera built-in shader variables).
             context.SetupCameraProperties(camera);
 
             // clear depth buffer
             CommandBuffer cmd = new CommandBuffer();
-            cmd.ClearRenderTarget(true, !SRP05CP.DrawSkybox, SRP05CP.ClearColor);
+            cmd.ClearRenderTarget(true, true, camera.backgroundColor);
             context.ExecuteCommandBuffer(cmd);
             cmd.Release();
 
-            // Setup global lighting shader variables
-            //SetupLightShaderVariables(cull.visibleLights, context);
-
-            if(SRP05CP.DrawSkybox)
-            {
-                // Draw skybox
-                context.DrawSkybox(camera);
-            }
+            //  context.DrawSkybox(camera);
 
             // Setup DrawSettings and FilterSettings
             ShaderPassName passName = new ShaderPassName("BasicPass");
             DrawRendererSettings drawSettings = new DrawRendererSettings(camera, passName);
             FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
 
-            if (SRP05CP.DrawOpaque)
-            {
-                // Draw opaque objects using BasicPass shader pass
-                drawSettings.sorting.flags = SortFlags.CommonOpaque;
-                filterSettings.renderQueueRange = RenderQueueRange.opaque;
-                context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-            }
+            //Draw passes that has no light mode (default)
+            ShaderPassName passNameDefault = new ShaderPassName("");
+            DrawRendererSettings drawSettingsDefault = new DrawRendererSettings(camera, passNameDefault);
+            drawSettingsDefault.SetShaderPassName(1,m_UnlitPassName);
 
-            if (SRP05CP.DrawTransparent)
-            {
-                // Draw transparent objects using BasicPass shader pass
-                drawSettings.sorting.flags = SortFlags.CommonTransparent;
-                filterSettings.renderQueueRange = RenderQueueRange.transparent;
-                context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-            }
+            // Draw opaque objects using BasicPass shader pass
+            drawSettings.sorting.flags = SortFlags.CommonOpaque;
+            filterSettings.renderQueueRange = RenderQueueRange.opaque;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
+
+            // Default
+            drawSettingsDefault.sorting.flags = SortFlags.CommonOpaque;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
+
+            // Draw transparent objects using BasicPass shader pass
+            drawSettings.sorting.flags = SortFlags.CommonTransparent;
+            filterSettings.renderQueueRange = RenderQueueRange.transparent;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
+
+            // Default
+            drawSettingsDefault.sorting.flags = SortFlags.CommonTransparent;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
 
             context.Submit();
         }
     }
 }
 
-public class SRP05CustomParameter
-{
-    public Color ClearColor = Color.white;
-    public bool DrawSkybox = true;
-    public bool DrawOpaque = true;
-    public bool DrawTransparent = true;
-
-    public SRP05CustomParameter()
-    {
-
-    }
-}

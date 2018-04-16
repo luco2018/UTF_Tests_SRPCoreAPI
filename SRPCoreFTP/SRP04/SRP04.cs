@@ -60,19 +60,14 @@ public class SRP04Instance : RenderPipeline
         {
             // Culling
             ScriptableCullingParameters cullingParams;
-
             if (!CullResults.GetCullingParameters(camera, out cullingParams))
                 continue;
             CullResults cull = CullResults.Cull(ref cullingParams, context);
 
-            // Setup camera for rendering (sets render target, view/projection matrices and other
-            // per-camera built-in shader variables).
+            // Camera settings
             context.SetupCameraProperties(camera);
 
-            // Setup DrawSettings and FilterSettings
-            //FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
-            //filterSettings.renderQueueRange = RenderQueueRange.opaque;
-
+            // RenderPass
             using (RenderPass rp = new RenderPass(context, camera.pixelWidth, camera.pixelHeight, 1, new[] { m_Albedo, m_Emission, m_Output }, m_Depth))
             {
                 using (new RenderPass.SubPass(rp, new[] { m_Albedo, m_Emission }, null))
@@ -81,8 +76,6 @@ public class SRP04Instance : RenderPipeline
                     {
                         sorting = { flags = SortFlags.CommonOpaque }
                     };
-
-                   // DrawRendererSettings drawSettings = new DrawRendererSettings(camera, new ShaderPassName("BasicPass"));
                     var fs = new FilterRenderersSettings(true);
                     fs.renderQueueRange = RenderQueueRange.opaque;
                     context.DrawRenderers(cull.visibleRenderers, ref settings, fs);
@@ -95,7 +88,6 @@ public class SRP04Instance : RenderPipeline
                     {
                         sorting = { flags = SortFlags.CommonOpaque }
                     };
-                    //DrawRendererSettings drawSettings = new DrawRendererSettings(camera, new ShaderPassName("AddPass"));
                     var fs = new FilterRenderersSettings(true);
                     fs.renderQueueRange = RenderQueueRange.opaque;
                     context.DrawRenderers(cull.visibleRenderers, ref settings, fs);
