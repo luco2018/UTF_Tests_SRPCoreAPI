@@ -10,11 +10,13 @@ public class SceneRenderPipeline : MonoBehaviour
 
     void OnEnable()
     {
+        if(!Application.isPlaying)
         GraphicsSettings.renderPipelineAsset = renderPipelineAsset;
     }
 
     void OnValidate()
     {
+        if(!Application.isPlaying)
         GraphicsSettings.renderPipelineAsset = renderPipelineAsset;
     }
 }
