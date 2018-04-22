@@ -37,6 +37,9 @@ public class SRP08Instance : RenderPipeline
 public static class SRPDefault
 {
     private static readonly ShaderPassName m_UnlitPassName = new ShaderPassName("SRPDefaultUnlit");
+    private static ShaderPassName passNameDefault = new ShaderPassName("");
+    private static ShaderPassName passNameBase = new ShaderPassName("ForwardBase");
+    private static ShaderPassName passNameAdd = new ShaderPassName("ForwardAdd");
 
     public static void FilterCameras(Camera[] cameras, out Camera[] defaultCameras, out Camera[] customCameras)
     {
@@ -63,6 +66,7 @@ public static class SRPDefault
     {
         foreach (Camera camera in cameras)
         {
+
             ScriptableCullingParameters cullingParams;
             if (!CullResults.GetCullingParameters(camera, out cullingParams))
                 continue;
@@ -80,28 +84,73 @@ public static class SRPDefault
             cmd.Release();
 
             // Setup global lighting shader variables
-            //SetupLightShaderVariables(cull.visibleLights, context);
+            CommandBuffer cmdLighting = new CommandBuffer();
+            bool set = false;
+            for (int i=0; i< cull.visibleLights.Count; i++)
+            {
+                if(!set)
+                {
+                    VisibleLight light = cull.visibleLights[i];
+                    if (light.lightType == LightType.Directional)
+                    {
+                        cmdLighting.SetGlobalVector("_LightColor0", light.light.color);
+                        Vector4 dir = light.localToWorld.GetColumn(2);
+                        cmdLighting.SetGlobalVector("_WorldSpaceLightPos0", new Vector4(-dir.x, -dir.y, -dir.z, 0));
+                        set = true;
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+            }
+            context.ExecuteCommandBuffer(cmdLighting);
+            cmdLighting.Release();
 
             // Draw skybox
-            if(drawskybox) context.DrawSkybox(camera);
+            if (drawskybox) context.DrawSkybox(camera);
 
             // Setup DrawSettings and FilterSettings
-            ShaderPassName passName = new ShaderPassName("");
-            DrawRendererSettings drawSettings = new DrawRendererSettings(camera, passName);
-            drawSettings.SetShaderPassName(1,m_UnlitPassName);
             FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
 
-            // Draw opaque objects using BasicPass shader pass
-            drawSettings.sorting.flags = SortFlags.CommonOpaque;
-            filterSettings.renderQueueRange = RenderQueueRange.opaque;
-            context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
+            DrawRendererSettings drawSettingsDefault = new DrawRendererSettings(camera, passNameDefault);
+            drawSettingsDefault.SetShaderPassName(1,m_UnlitPassName);
 
-            // Draw transparent objects using BasicPass shader pass
-            drawSettings.sorting.flags = SortFlags.CommonTransparent;
+            DrawRendererSettings drawSettingsBase = new DrawRendererSettings(camera, passNameBase);
+            DrawRendererSettings drawSettingsAdd = new DrawRendererSettings(camera, passNameAdd);
+
+            //OPAQUE
+            filterSettings.renderQueueRange = RenderQueueRange.opaque;
+
+            // Draw OPAQUE objects using DEFAULT pass
+            drawSettingsDefault.sorting.flags = SortFlags.CommonOpaque;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
+
+            // Draw OPAQUE objects using BASE pass
+            drawSettingsBase.sorting.flags = SortFlags.CommonOpaque;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsBase, filterSettings);
+
+            // Draw OPAQUE objects using ADD pass
+            drawSettingsAdd.sorting.flags = SortFlags.CommonOpaque;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsAdd, filterSettings);
+
+            //TRANSPARENT
             filterSettings.renderQueueRange = RenderQueueRange.transparent;
-            context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
+
+            // Draw TRANSPARENT objects using DEFAULT pass
+            drawSettingsDefault.sorting.flags = SortFlags.CommonTransparent;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsDefault, filterSettings);
+
+            // Draw TRANSPARENT objects using BASE pass
+            drawSettingsBase.sorting.flags = SortFlags.CommonTransparent;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsBase, filterSettings);
+
+            // Draw TRANSPARENT objects using ADD pass
+            drawSettingsAdd.sorting.flags = SortFlags.CommonTransparent;
+            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsAdd, filterSettings);
 
             context.Submit();
         }
     }
+
 }
