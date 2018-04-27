@@ -77,9 +77,11 @@ public static class SRPDefault
 
             // clear depth buffer
             CommandBuffer cmd = new CommandBuffer();
-            bool drawskybox = false;
-            if(camera.clearFlags == CameraClearFlags.Skybox) drawskybox = true;
-            cmd.ClearRenderTarget(true, !drawskybox, camera.backgroundColor);
+            bool clearcolor = true;
+            bool cleardepth = true;
+            if( camera.clearFlags == CameraClearFlags.Skybox || camera.clearFlags == CameraClearFlags.Depth ) {clearcolor = false;}
+            //else if(camera.clearFlags == CameraClearFlags.Depth) {clearcolor = false;}
+            cmd.ClearRenderTarget(cleardepth, clearcolor, camera.backgroundColor);
             context.ExecuteCommandBuffer(cmd);
             cmd.Release();
 
@@ -108,7 +110,7 @@ public static class SRPDefault
             cmdLighting.Release();
 
             // Draw skybox
-            if (drawskybox) context.DrawSkybox(camera);
+            if( camera.clearFlags == CameraClearFlags.Skybox) context.DrawSkybox(camera);
 
             // Setup DrawSettings and FilterSettings
             FilterRenderersSettings filterSettings = new FilterRenderersSettings(true);
