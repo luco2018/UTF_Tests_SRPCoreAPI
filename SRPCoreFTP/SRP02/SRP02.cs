@@ -29,6 +29,12 @@ public class SRP02 : RenderPipelineAsset
         SRP02CP.DrawTransparent = DrawTransparent;
         return new SRP02Instance(SRP02CP);
     }
+
+    public override Shader GetDefaultShader()
+    {
+        Shader m_DefaultShader = Shader.Find("FTPCustom/SRP02/Opaque Unlit");
+        return m_DefaultShader;
+    }
 }
 
 public class SRP02Instance : RenderPipeline
