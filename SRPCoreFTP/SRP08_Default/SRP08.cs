@@ -169,44 +169,6 @@ public static class SRPDefault
             DrawRendererSettings drawSettingsShadow = new DrawRendererSettings(camera, passNameShadow);
             //DrawRendererSettings drawSettingsMeta = new DrawRendererSettings(camera, passNameMeta);
 
-            //************************** Set TempRT ************************************
-            CommandBuffer cmdTempId = new CommandBuffer();
-            cmdTempId.name = "Setup TempRT";
-
-            RenderTextureDescriptor depthRTDesc = new RenderTextureDescriptor(camera.pixelWidth, camera.pixelHeight);
-            depthRTDesc.colorFormat = RenderTextureFormat.Depth;
-            depthRTDesc.depthBufferBits = 32;
-            cmdTempId.GetTemporaryRT(m_DepthRTid, depthRTDesc,FilterMode.Bilinear);
-
-            RenderTextureDescriptor colorRTDesc = new RenderTextureDescriptor(camera.pixelWidth, camera.pixelHeight);
-            colorRTDesc.colorFormat = m_ColorFormat;
-            colorRTDesc.depthBufferBits = 32; // TODO: does the color RT always need depth?
-            colorRTDesc.sRGB = true;
-            colorRTDesc.msaaSamples = 1;
-            colorRTDesc.enableRandomWrite = false;
-            cmdTempId.GetTemporaryRT(m_ColorRTid, colorRTDesc,FilterMode.Bilinear);
-
-            context.ExecuteCommandBuffer(cmdTempId);
-            cmdTempId.Release();
-
-            //************************** Depth (for CameraDepthTexture in shader) ************************************
-            CommandBuffer cmdSkyNOpaque = new CommandBuffer();
-            cmdSkyNOpaque.name = "Skybox and Opaque";
-            
-            cmdSkyNOpaque.SetRenderTarget(m_ColorRT , m_DepthRT);
-            ClearFlag(cmdSkyNOpaque,camera);
-
-            // Opaque
-            filterSettings.renderQueueRange = RenderQueueRange.opaque;
-            drawSettingsShadow.sorting.flags = SortFlags.CommonOpaque;
-            context.DrawRenderers(cull.visibleRenderers, ref drawSettingsShadow, filterSettings);
-
-            cmdSkyNOpaque.SetGlobalTexture(m_DepthRTid, m_DepthRT);
-            cmdSkyNOpaque.SetRenderTarget(BuiltinRenderTextureType.CameraTarget , m_DepthRT);
-
-            context.ExecuteCommandBuffer(cmdSkyNOpaque);
-            cmdSkyNOpaque.Release();
-
             //************************** Skybox ************************************
             if( camera.clearFlags == CameraClearFlags.Skybox) context.DrawSkybox(camera);
 
@@ -223,38 +185,6 @@ public static class SRPDefault
             drawSettingsAdd.sorting.flags = SortFlags.CommonOpaque;
             context.DrawRenderers(cull.visibleRenderers, ref drawSettingsAdd, filterSettings);
 
-            //************************** Post-processing for opaque ************************************
-            m_CameraPostProcessLayer = camera.GetComponent<PostProcessLayer>();
-            if(m_CameraPostProcessLayer != null && m_CameraPostProcessLayer.enabled)
-            {
-                //Post-processing
-                CommandBuffer cmdpp = new CommandBuffer();
-                cmdpp.name = "Post-processing for Opaque";
-
-                m_CurrCameraColorRT = BuiltinRenderTextureType.CameraTarget;
-                cmdpp.Blit( m_CurrCameraColorRT, m_ColorRT);
-                //cmdpp.SetRenderTarget(m_ColorRT , m_DepthRT);
-                //cmdpp.SetRenderTarget(m_ColorRT , m_DepthRT);
-
-                m_PostProcessRenderContext.Reset();
-                m_PostProcessRenderContext.camera = camera;
-                m_PostProcessRenderContext.source = m_ColorRT;
-                m_PostProcessRenderContext.sourceFormat = m_ColorFormat;
-                m_PostProcessRenderContext.destination = m_ColorRT;
-                m_PostProcessRenderContext.command = cmdpp;
-                m_PostProcessRenderContext.flip = camera.targetTexture == null;
-                m_CameraPostProcessLayer.Render(m_PostProcessRenderContext);
-
-                cmdpp.Blit(m_ColorRT,m_CurrCameraColorRT); //Color
-                //m_CurrCameraColorRT = m_ColorRT;
-
-                //cmdpp.Blit(m_CurrCameraColorRT,BuiltinRenderTextureType.CameraTarget); //Color
-                cmdpp.SetRenderTarget(m_CurrCameraColorRT , m_DepthRT);
-                
-                context.ExecuteCommandBuffer(cmdpp);
-                cmdpp.Release();
-            }
-
             //************************** Transparent ************************************
             filterSettings.renderQueueRange = RenderQueueRange.transparent;
 
@@ -269,17 +199,6 @@ public static class SRPDefault
             // Draw TRANSPARENT objects using ADD pass
             drawSettingsAdd.sorting.flags = SortFlags.CommonTransparent;
             context.DrawRenderers(cull.visibleRenderers, ref drawSettingsAdd, filterSettings);
-
-            //************************** Clean Up ************************************
-
-            CommandBuffer cmdclean = new CommandBuffer();
-            cmdclean.name = "Clean Up";
-            cmdclean.ReleaseTemporaryRT(m_ColorRTid);
-            cmdclean.ReleaseTemporaryRT(m_DepthRTid);
-            //cmdclean.ReleaseTemporaryRT(m_OpaqueRTid);
-            //cmdclean.ReleaseTemporaryRT(m_ShadowMapid);
-            context.ExecuteCommandBuffer(cmdclean);
-            cmdclean.Release();
 
             context.Submit();
         }
